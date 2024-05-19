@@ -1,10 +1,10 @@
 import disnake
 from disnake.ext import commands
-from random import randrange
+import datetime
 import re
 import sqlite3
 import pymorphy3
-from config import token, filt
+from config import token, filt, author
 
 db = sqlite3.connect('Main.db')
 c = db.cursor()
@@ -70,29 +70,91 @@ async def on_message(message):
                             await message.channel.send(f'{message.author.mention}')
                             await message.delete()
                             c.execute(f"UPDATE users SET warns = warns + 1 WHERE id = {message.author.id}")
+                            db.commit()
                             br = True
                             break
 
 
-@bot.slash_command(name='view_warns', description='Добавить запрещенные слова')
+@bot.slash_command(name='view_warns', description='Посмотреть свои варны')
 async def my_warns(ctx):
-    await ctx.send(f'У тебя {c.execute(f"SELECT warns FROM users WHERE id = {ctx.author.id}").fetchone()[0]} варн')
+    await ctx.send(
+        f'Количество варнов: {c.execute(f"SELECT warns FROM users WHERE id = {ctx.author.id}").fetchone()[0]}')
 
 
-@bot.slash_command(name='add_sensored', description='Добавить запрещенные слова')
-@commands.has_permissions(administrator=True)
+@bot.slash_command(name='view_member_warns', description='Посмотреть варны участника.')
+async def other_warns(ctx, member: disnake.Member):
+    await ctx.send(f'Количество варнов: {c.execute(f"SELECT warns FROM users WHERE id = {member.id}").fetchone()[0]} ')
+
+
+@bot.slash_command(name='Ban_words', description='Добавить запрещенные слова')
 async def word_add(ctx, message):
-    if ',' in message:
-        message = re.sub(',', '', message)
-    words = message.split()
-    for word in words:
-        c.execute(f"INSERT INTO words VALUES('{word}')")
+    if c.execute(f"SELECT level FROM users WHERE id = {ctx.author.id}").fetchone()[0] >= 2:
+        if ',' in message:
+            message = re.sub(',', '', message)
+        words = message.split()
+        for word in words:
+            c.execute(f"INSERT INTO words VALUES('{word}')")
+            db.commit()
+        await ctx.send(f'В запрещенные слова добавлено: {",".join(words)}')
+    else:
+        await ctx.send(f'Ваш уровень слишком мал для этого действия.')
+
+
+@bot.slash_command(name='give_mute', description='Дать мут нарушителю.')
+async def mute(ctx, member: disnake.Member):
+    try:
+        warns = c.execute(f"SELECT warns FROM users WHERE id = {member.id}").fetchone()[0]
+        if c.execute(f"SELECT level FROM users WHERE id = {ctx.author.id}").fetchone()[0] >= 1:
+            a = c.execute(f"SELECT level FROM users WHERE id = {member.id}").fetchone()[0]
+            b = c.execute(f"SELECT level FROM users WHERE id = {ctx.author.id}").fetchone()[0]
+            if a > b:
+                ctx.send(f'У этого пользователя уровень выше, чем у вас')
+            elif warns < 0:
+                ctx.send(f'Данный участник не получил нужное количество варнов для мута')
+            else:
+                time = datetime.datetime.now() + datetime.timedelta(hours=int(6))
+                await member.timeout(until=time)
+                await ctx.response.send_message(f'Выдан мут участнику {member}')
+        else:
+            await ctx.send(f'У вас недостаточно прав для выдачи мутов')
+    except:
+        await ctx.send(f'Не удалось выдать мут. Возможно тот, кому вы хотите его выдать обладает правами администратора.')
+
+
+@bot.slash_command(name='set_level', description='Назначить уровень.')
+async def set_lvl(ctx, member: disnake.Member, lvl: int):
+    if c.execute(f"SELECT level FROM users WHERE id = {ctx.author.id}").fetchone()[0] >= 3:
+        c.execute(f"UPDATE users SET level = {lvl} WHERE id = {member.id}")
         db.commit()
-    await ctx.send(f'В запрещенные слова добавлено: {",".join(words)}')
+        await ctx.send(
+            f'Теперь уровень {member} - {c.execute(f"SELECT level FROM users WHERE id = "
+                                                   f"{ctx.author.id}").fetchone()[0]}')
+    elif ctx.author.id == author:
+        c.execute(f"UPDATE users SET level = {lvl} WHERE id = {member.id}")
+
+        db.commit()
+        await ctx.send(
+            f'Теперь уровень {member} - {c.execute(f"SELECT level FROM users WHERE id = "
+                                                   f"{ctx.author.id}").fetchone()[0]}')
+    else:
+        await ctx.send(f'У вас слишком низкий уровень для этого действия.')
 
 
-#
-#
+@bot.slash_command(name='delete_warn', description='Удалить варн.')
+async def warned(ctx, member: disnake.Member):
+    if c.execute(f"SELECT level FROM users WHERE id = {ctx.author.id}").fetchone()[0] > 0:
+        c.execute(f"UPDATE users SET warns = warns - 1 WHERE id = {member.id}")
+        db.commit()
+    else:
+        ctx.send('Твой уровень слишком мал для этого действия.')
+
+
+@bot.slash_command(name='view_sensoreds_words', description='Посмотреть запрещенные слова.')
+async def view_words(ctx):
+    words = c.execute(f"SELECT word FROM words").fetchall()
+    await ctx.send(f'{words}')
+
+
 # @commands.has_permissions(administrator=True)
 # async def spam(ctx, message):
 #     while spam:
