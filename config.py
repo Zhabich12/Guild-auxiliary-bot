@@ -1,4 +1,4 @@
-token = 'MTIzMDYxNTkyNDQ0MTA4ODA2Mw.GU6_88.c5aB5G-Xpv-1anDggCS1UKaLuvZTfpYIXUprfc'
+token = 'MTIzMDYxNTkyNDQ0MTA4ODA2Mw.GfuIcJ.sKI8wwsIb5VI5_bBmWMgECKnXpvWoPrxJVO-18'
 database = 'Main.db'
 filt = True
 author = 520267231322570783
