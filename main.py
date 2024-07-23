@@ -12,5 +12,5 @@ async def on_ready():
 
 bot.load_extension('cogs.Moderation')
 bot.load_extension('cogs.Database')
-
+bot.load_extension('cogs.Help')
 bot.run(token)

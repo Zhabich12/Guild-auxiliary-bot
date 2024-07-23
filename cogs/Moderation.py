@@ -133,16 +133,20 @@ class Moderation(commands.Cog):
         db = sqlite3.connect(database)
         c = db.cursor()
         try:
+            # из базы данных берется кол-во варнов того, кому выдается мут
             warns = c.execute("SELECT warns FROM users WHERE id = ? AND server_id = ?",
                               (member.id, ctx.guild.id)).fetchone()
+            # из базы данных берется уровень того, кто вызвал команду
             author_level = c.execute("SELECT level FROM users WHERE id = ? AND server_id = ?",
                                      (ctx.author.id, ctx.guild.id)).fetchone()
+            # из базы данных берется уровень того, кому выдается мут
             member_level = c.execute("SELECT level FROM users WHERE id = ? AND server_id = ?",
                                      (member.id, ctx.guild.id)).fetchone()
             if author_level and author_level[0] >= 1:
                 if member_level and member_level[0] > author_level[0]:
                     await ctx.send(f'У этого пользователя уровень выше, чем у вас')
-                elif warns and warns[0] < 0:
+                elif warns[0] < c.execute("SELECT warns_for_mute FROM guild_config WHERE server_id = ?",
+                                          (ctx.guild.id, )).fetchone()[0]:
                     await ctx.send(f'Данный участник не получил нужное количество варнов для мута')
                 else:
                     time = datetime.datetime.now() + datetime.timedelta(hours=6)
@@ -243,6 +247,26 @@ class Moderation(commands.Cog):
             c.execute("UPDATE guild_config SET filter = ? WHERE server_id = ?",
                       (0, interaction.guild.id))
             await interaction.response.send_message(f'Успешно!')
+        db.commit()
+        db.close()
+
+    @bot.slash_command(name='delete_messages',
+                       description='Начать чистку сообщений в канале.')
+    async def delete_messages(self, interaction, limit=100):
+        db = sqlite3.connect(database)
+        c = db.cursor()
+        if c.execute("SELECT level FROM users WHERE id = ? AND server_id = ?",
+                        (interaction.author.id, interaction.guild.id)).fetchone()[0] > 0:
+            await interaction.message.Channel.purge(limit=limit)
+        db.commit()
+        db.close()
+
+    @bot.slash_command(name='delete_message', description='Для удаления сообщения введите эту команду ответом на сообщение, которое вы хотите удалить.')
+    async def delete_message(self, ctx):
+        db = sqlite3.connect(database)
+        if ctx.message.reference:
+            a = ctx.message.reference.message_id
+            ctx.interaction.delete_message(a)
         db.commit()
         db.close()
 
